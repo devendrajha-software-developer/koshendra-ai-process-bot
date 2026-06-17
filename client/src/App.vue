@@ -1,5 +1,6 @@
 <template>
   <div class="app-container">
+    <RateLimitNotification />
     <AuthModal 
       :isOpen="showAuthModal" 
       @close="handleAuthClose"
@@ -39,6 +40,7 @@ import Sidebar from './components/sidebar/sidebar.vue';
 import AppHeader from './components/Header/app-header.vue';
 import AuthModal from './components/auth/auth-modal.vue';
 import ChatScreen from './components/Chat/chat-screen/chat-screen.vue';
+import RateLimitNotification from './components/RateLimitNotification.vue';
 import { useAuthStore } from './stores/authStore';
 import { useChatStore } from './stores/chatStore';
 import { useChat } from './composables/useChat';

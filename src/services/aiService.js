@@ -93,7 +93,10 @@ async function askGroq(question, contextKnowledge, apiKey, conversationHistory =
         status: error.response.status,
         data: error.response.data 
       });
-      throw new Error(`Groq API Error: ${error.response.data?.error?.message || error.response.statusText}`);
+      const err = new Error(`Groq API Error: ${error.response.data?.error?.message || error.response.statusText}`);
+      err.statusCode = error.response.status;
+      err.retryAfter = error.response.headers?.['retry-after'] || null;
+      throw err;
     }
     throw error;
   }
@@ -102,51 +105,73 @@ async function askGroq(question, contextKnowledge, apiKey, conversationHistory =
 async function askOpenAI(question, contextKnowledge, apiKey) {
   const provider = AI_PROVIDERS.openai;
   
-  const response = await axios.post(
-    provider.baseUrl,
-    {
-      model: config.ai.model || provider.defaultModel,
-      messages: [
-        { role: "system", content: getSystemPrompt(contextKnowledge) },
-        { role: "user", content: question },
-      ],
-      temperature: config.ai.temperature,
-      max_tokens: config.ai.maxTokens,
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+  try {
+    const response = await axios.post(
+      provider.baseUrl,
+      {
+        model: config.ai.model || provider.defaultModel,
+        messages: [
+          { role: "system", content: getSystemPrompt(contextKnowledge) },
+          { role: "user", content: question },
+        ],
+        temperature: config.ai.temperature,
+        max_tokens: config.ai.maxTokens,
       },
-      timeout: config.ai.timeout,
-    }
-  );
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        timeout: config.ai.timeout,
+      }
+    );
 
-  return response.data.choices[0].message.content;
+    return response.data.choices[0].message.content;
+  } catch (error) {
+    if (error.response) {
+      logger.logError(error, { context: "OpenAI API", status: error.response.status, data: error.response.data });
+      const err = new Error(`OpenAI API Error: ${error.response.data?.error?.message || error.response.statusText}`);
+      err.statusCode = error.response.status;
+      err.retryAfter = error.response.headers?.['retry-after'] || null;
+      throw err;
+    }
+    throw error;
+  }
 }
 
 async function askAnthropic(question, contextKnowledge, apiKey) {
   const provider = AI_PROVIDERS.anthropic;
   
-  const response = await axios.post(
-    provider.baseUrl,
-    {
-      model: config.ai.model || provider.defaultModel,
-      max_tokens: config.ai.maxTokens,
-      system: getSystemPrompt(contextKnowledge),
-      messages: [{ role: "user", content: question }],
-    },
-    {
-      headers: {
-        "x-api-key": apiKey,
-        "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
+  try {
+    const response = await axios.post(
+      provider.baseUrl,
+      {
+        model: config.ai.model || provider.defaultModel,
+        max_tokens: config.ai.maxTokens,
+        system: getSystemPrompt(contextKnowledge),
+        messages: [{ role: "user", content: question }],
       },
-      timeout: config.ai.timeout,
-    }
-  );
+      {
+        headers: {
+          "x-api-key": apiKey,
+          "Content-Type": "application/json",
+          "anthropic-version": "2023-06-01",
+        },
+        timeout: config.ai.timeout,
+      }
+    );
 
-  return response.data.content[0].text;
+    return response.data.content[0].text;
+  } catch (error) {
+    if (error.response) {
+      logger.logError(error, { context: "Anthropic API", status: error.response.status, data: error.response.data });
+      const err = new Error(`Anthropic API Error: ${error.response.data?.error?.message || error.response.statusText}`);
+      err.statusCode = error.response.status;
+      err.retryAfter = error.response.headers?.['retry-after'] || null;
+      throw err;
+    }
+    throw error;
+  }
 }
 
 async function askAI(question, conversationHistory = []) {

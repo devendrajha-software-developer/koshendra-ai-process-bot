@@ -34,6 +34,17 @@ async function handleAsk(req, res) {
   } catch (error) {
     logger.logError(error, { question });
 
+    // Forward rate-limit (429) from AI provider so the client can show a notification
+    if (error.statusCode === 429) {
+      if (error.retryAfter) {
+        res.set('Retry-After', error.retryAfter);
+      }
+      return res.status(429).json({
+        error: error.message || "AI provider rate limit reached. Please wait and try again.",
+        retryAfter: error.retryAfter || 15,
+      });
+    }
+
     res.status(500).json({
       error: error.message || "Failed to process question",
     });

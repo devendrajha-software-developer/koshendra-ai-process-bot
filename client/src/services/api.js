@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { triggerRateLimit } from '../composables/useRateLimit';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
@@ -24,13 +25,13 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Handle rate limit (429) — auto-retry once after waiting
+    // Handle rate limit (429) — show notification, wait 15s, then auto-retry once
     if (error.response?.status === 429 && !originalRequest._retried) {
       originalRequest._retried = true;
       const retryAfter = error.response.headers['retry-after'];
-      const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 10000;
-      console.warn(`Rate limited. Retrying in ${waitTime / 1000}s...`);
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
+      const waitSeconds = retryAfter ? parseInt(retryAfter) : 15;
+      console.warn(`Rate limited. Retrying in ${waitSeconds}s...`);
+      await triggerRateLimit(waitSeconds);
       return api(originalRequest);
     }
 
