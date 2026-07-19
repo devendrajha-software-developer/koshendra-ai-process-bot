@@ -7,6 +7,8 @@ An intelligent, self-hosted internal knowledge-base Q&A assistant that lets team
 ## Table of Contents
 
 - [Overview](#overview)
+- [Project Vision & Judging Criteria](#project-vision--judging-criteria)
+- [Recent Changes](#recent-changes)
 - [Architecture](#architecture)
 - [How It Works — Data Flow](#how-it-works--data-flow)
 - [Features](#features)
@@ -18,9 +20,11 @@ An intelligent, self-hosted internal knowledge-base Q&A assistant that lets team
 - [Knowledge Base System](#knowledge-base-system)
 - [Middleware & Security](#middleware--security)
 - [Logging & Observability](#logging--observability)
-- [Quick Start](#quick-start)
+- [Quick Start (Clone & Run)](#quick-start-clone--run)
 - [Configuration Reference](#configuration-reference)
 - [Development Mode](#development-mode)
+- [Roadmap & Improvements](#roadmap--improvements)
+- [Potential New Features](#potential-new-features)
 
 ---
 
@@ -36,6 +40,36 @@ An intelligent, self-hosted internal knowledge-base Q&A assistant that lets team
 4. Returns a clear, grounded answer — not hallucinated, but based on **your** docs
 
 This makes it a **Retrieval-Augmented Generation (RAG)** system tailored for internal knowledge.
+
+---
+
+## Project Vision & Judging Criteria
+
+This project was built as a **central command for operational knowledge** — a single AI assistant that helps teams navigate complex, multi-product enterprise workflows (Order Management, Shipment, Billing, Inventory) without digging through scattered documentation.
+
+Projects in this space are evaluated on:
+
+| Criterion | How Koshendra addresses it |
+|-----------|----------------------------|
+| **Innovation** | Combines keyword-based RAG with a product/module-aware chat UI — users browse domains (OM, SM, BM, IM) and ask contextual questions instead of searching static wikis |
+| **Execution** | Full-stack working app: Vue 3 frontend, Express API, MongoDB auth & chat history, multi-provider LLM integration, rate limiting, and structured knowledge retrieval |
+| **Impact** | Reduces time-to-answer for process questions; onboarding new team members faster; one place for order, shipment, billing, and inventory workflows |
+| **Product quality** | Polished chat UX with auth, sidebar history, suggested questions, product explorer, responsive layout, and graceful error/rate-limit handling |
+| **Meaningful use of AI** | LLM answers are **grounded in loaded documentation** — the system retrieves relevant docs first, then generates; it refuses to invent facts when no context is found |
+| **Creativity** | Product-centric navigation (modules + starter questions) paired with a general Q&A engine; demo-safe generic knowledge base for public sharing without exposing confidential internals |
+
+---
+
+## Recent Changes
+
+| Change | Details |
+|--------|---------|
+| **Generic knowledge base** | Replaced confidential internal docs with demo-safe Markdown in `knowledge/` covering all four product domains (OM, SM, BM, IM) and their modules |
+| **Auth proxy fix** | Vite dev proxy now correctly targets backend port **7000** (was misconfigured to 7001, causing login/register `ECONNREFUSED` errors) |
+| **Knowledge file structure** | Four aligned docs: `order-management.md`, `shipment-management.md`, `billing-management.md`, `inventory-management.md` |
+| **Demo disclaimer** | Each knowledge file includes a notice that content is fictional/sample data for public demos |
+
+> **For production:** Replace files in `knowledge/` with your real internal documentation. Never commit `.env` or confidential docs to a public repository.
 
 ---
 
@@ -295,17 +329,17 @@ ai-process-bot/
 │   ├── vite.config.js             # Vite config with API proxy for dev mode
 │   └── package.json
 │
-├── knowledge/                     # Knowledge base directory
-│   ├── order-process.md           # Example: Order lifecycle documentation
-│   ├── dispatch-workflow.md       # Example: Dispatch automation docs
-│   └── ...                        # Add any .md or .txt files here
+├── knowledge/                     # Knowledge base directory (demo-safe by default)
+│   ├── order-management.md          # Order Management (OM) — creation, processing, status, integrations
+│   ├── shipment-management.md       # Shipment Management (SM) — fulfilment, carriers, tracking, returns
+│   ├── billing-management.md        # Billing Management (BM) — invoicing, payments, cycles, reports
+│   └── inventory-management.md      # Inventory Management (IM) — stock, warehouse, replenishment
 │
 ├── logs/                          # Auto-created at runtime
 │   ├── queries.log                # All Q&A interactions with timestamps
 │   └── errors.log                 # Error traces
 │
-├── .env                           # Environment configuration (create from .env.example)
-├── .env.example                   # Template with all configurable variables
+├── .env                           # Environment configuration (create manually — see Quick Start)
 └── package.json
 ```
 
@@ -334,7 +368,7 @@ Configures the Express application stack:
 ### Configuration (`src/config/`)
 
 **`index.js`** — Single source of truth for all app configuration:
-- `port` — Server port (default: 3000)
+- `port` — Server port (default: 7000)
 - `aiProvider` — Active provider name (`groq`, `openai`, `anthropic`)
 - `aiModel` — Model identifier for the active provider
 - `apiKeys` — Provider API keys from environment
@@ -562,8 +596,9 @@ Provider abstraction:
 
 ### Vite Configuration (`vite.config.js`)
 
-- **Dev proxy** — Proxies `/api/*` requests to `http://localhost:3000` during development, so the Vue dev server (port 5173) can talk to the Express backend without CORS issues
-- **Build output** — Compiles to `client/dist/` which Express serves as static files in production
+- **Dev server** — Runs on **http://localhost:7025**
+- **Dev proxy** — Proxies `/api/*` requests to `http://localhost:7000` (Express backend). Both ports must match your `.env` and `vite.config.js`
+- **Build output** — Compiles to `client/dist/` which can be served by Express in production
 
 ---
 
@@ -646,13 +681,75 @@ List all loaded knowledge documents.
 {
   "success": true,
   "documents": [
-    "order-process.md",
-    "dispatch-workflow.md",
-    "carrier-integration.md"
+    "order-management.md",
+    "shipment-management.md",
+    "billing-management.md",
+    "inventory-management.md"
   ],
-  "count": 3
+  "count": 4
 }
 ```
+
+---
+
+### `POST /api/auth/register`
+
+Create a new user account.
+
+**Request:**
+```json
+{
+  "name": "Jane Doe",
+  "email": "jane@example.com",
+  "password": "securepassword"
+}
+```
+
+**Success Response (201):**
+```json
+{
+  "success": true,
+  "message": "Registration successful",
+  "user": { "name": "Jane Doe", "email": "jane@example.com", "role": "user" },
+  "token": "<jwt>"
+}
+```
+
+---
+
+### `POST /api/auth/login`
+
+Authenticate and receive a JWT.
+
+**Request:**
+```json
+{
+  "email": "jane@example.com",
+  "password": "securepassword"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "user": { "name": "Jane Doe", "email": "jane@example.com", "role": "user" },
+  "token": "<jwt>"
+}
+```
+
+---
+
+### `GET /api/auth/me`
+
+Get the current user (requires `Authorization: Bearer <token>` header).
+
+---
+
+### `GET/POST/DELETE /api/chats/*`
+
+Chat history endpoints — all require JWT authentication. See `src/routes/chatRoutes.js` for full list.
 
 ---
 
@@ -724,23 +821,27 @@ Restart the server after changing providers.
 
 ### Adding Knowledge
 
-Drop any `.md` or `.txt` file into the `knowledge/` directory:
+The repository ships with **demo-safe generic documentation** aligned to the four products in the UI:
 
 ```bash
 knowledge/
-├── order-lifecycle.md          # How orders flow through the system
-├── dispatch-automation.md      # Dispatch rules and carrier routing
-├── carrier-integration.md      # Carrier API integration details
-├── customer-onboarding.md      # Customer setup workflows
-└── troubleshooting-guide.txt   # Common issues and fixes
+├── order-management.md         # OM: creation, processing, status, integrations, reports
+├── shipment-management.md      # SM: fulfilment, carriers, tracking, returns
+├── billing-management.md       # BM: invoicing, payments, billing cycles, financial reports
+├── inventory-management.md     # IM: stock, warehouse ops, replenishment
 ```
+
+Each file maps to modules and starter questions in `client/src/data/productsData.js`, so the Q&A bot can answer sample questions out of the box.
+
+**For your own deployment:** replace these files with real internal docs. Keep filenames descriptive — they appear in logs and search metadata.
 
 **Best practices for knowledge files:**
 - Use descriptive filenames (they're used as document titles in logs)
 - Use clear headings and bullet points — helps keyword matching
-- One topic per file for better relevance scoring
+- One product/domain per file (or split large domains into focused files)
 - Include the terminology your team actually uses when asking questions
 - Restart the server after adding/modifying knowledge files
+- Do **not** commit confidential documentation to public repos
 
 ---
 
@@ -822,53 +923,96 @@ All errors with context:
 
 ---
 
-## Quick Start
+## Quick Start (Clone & Run)
 
 ### Prerequisites
 
 - **Node.js** v18+
-- An API key for at least one AI provider (Groq recommended — free tier available at [console.groq.com](https://console.groq.com))
+- **MongoDB** — local instance or [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) free cluster
+- An API key for at least one AI provider (Groq recommended — free tier at [console.groq.com](https://console.groq.com))
 
-### 1. Install Dependencies
+### 1. Clone the repository
 
 ```bash
-# Install server dependencies
+git clone https://github.com/<your-org>/koshendra-ai-process-bot.git
+cd koshendra-ai-process-bot
+```
+
+### 2. Install dependencies
+
+```bash
+# Backend (project root)
 npm install
 
-# Install client dependencies
+# Frontend
 cd client && npm install && cd ..
 ```
 
-### 2. Configure Environment
+### 3. Create `.env` in the project root
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your API key:
+Create a `.env` file (this file is gitignored — never commit secrets):
 
 ```env
+# Server
+PORT=7000
+NODE_ENV=development
+
+# MongoDB (required for auth & chat history)
+MONGODB_URI=mongodb://localhost:27017/koshendra
+# Or MongoDB Atlas:
+# MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/koshendra
+
+# Auth
+JWT_SECRET=change-this-to-a-long-random-string
+
+# AI Provider
 AI_PROVIDER=groq
 GROQ_API_KEY=your_groq_api_key_here
 AI_MODEL=llama-3.1-8b-instant
-PORT=3000
+
+# Optional
+# ALLOWED_ORIGINS=http://localhost:7025,http://localhost:5173
+# RATE_LIMIT_WINDOW_MS=60000
+# RATE_LIMIT_MAX_REQUESTS=100
 ```
 
-### 3. Add Knowledge Files
+### 4. Run in development (recommended)
 
-Add your internal documentation as `.md` or `.txt` files to the `knowledge/` directory.
-
-### 4. Build & Run
+Use **two terminals**:
 
 ```bash
-# Build Vue frontend
-cd client && npm run build && cd ..
+# Terminal 1 — Backend API (port 7000)
+npm run dev
 
-# Start server
-node server.js
+# Terminal 2 — Vue frontend with hot reload (port 7025)
+cd client && npm run start
 ```
 
-Open **http://localhost:3000**
+Open **http://localhost:7025**
+
+1. Register or sign in via the auth modal
+2. Browse products/modules in the sidebar or welcome screen
+3. Ask questions — answers are grounded in the demo knowledge files
+
+> **Auth not working?** Ensure the backend is on port **7000** and `client/vite.config.js` proxy target is also `http://localhost:7000`. Restart the Vite dev server after any config change.
+
+### 5. Production build (optional)
+
+```bash
+cd client && npm run build && cd ..
+npm run dev   # or: node server.js
+```
+
+Serve the built frontend from `client/dist/` via your hosting setup, with the API on the same or proxied origin.
+
+### Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| `ECONNREFUSED` on login/register | Backend not running, or Vite proxy port mismatch (must be 7000) |
+| MongoDB connection error | Check `MONGODB_URI` and network access (Atlas IP whitelist) |
+| "I don't have information about that" | Question keywords may not match knowledge docs; try module starter questions |
+| Rate limit (429) | Wait for retry or increase `RATE_LIMIT_MAX_REQUESTS` in `.env` |
 
 ---
 
@@ -876,32 +1020,75 @@ Open **http://localhost:3000**
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `3000` | Server port |
+| `PORT` | `7000` | Backend server port |
+| `NODE_ENV` | `development` | Environment mode |
+| `MONGODB_URI` | `mongodb://localhost:27017/ai-process-bot` | MongoDB connection string (required) |
+| `JWT_SECRET` | *(fallback in code — set in production)* | Secret for signing JWT auth tokens |
 | `AI_PROVIDER` | `groq` | AI provider (`groq`, `openai`, `anthropic`) |
 | `AI_MODEL` | `llama-3.1-8b-instant` | Model identifier for the active provider |
 | `GROQ_API_KEY` | — | Groq API key |
 | `OPENAI_API_KEY` | — | OpenAI API key |
 | `ANTHROPIC_API_KEY` | — | Anthropic API key |
+| `ALLOWED_ORIGINS` | `http://localhost:7025,http://localhost:5173` | Comma-separated CORS origins |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window in milliseconds |
-| `RATE_LIMIT_MAX` | `20` | Max requests per rate limit window |
+| `RATE_LIMIT_MAX_REQUESTS` | `100` | Max requests per rate limit window |
 
 ---
 
 ## Development Mode
 
-Run backend and frontend separately for hot-reloading:
+| Service | Command | URL |
+|---------|---------|-----|
+| Backend | `npm run dev` (root) | http://localhost:7000 |
+| Frontend | `cd client && npm run start` | http://localhost:7025 |
+| Health check | — | http://localhost:7000/api/health |
+| API docs (manual) | — | See [API Reference](#api-reference) |
+
+Vite proxies `/api/*` from port **7025** → **7000**. The frontend `axios` client uses `baseURL: '/api'`, so no hardcoded API URL is needed in dev.
+
+**Useful npm scripts:**
 
 ```bash
-# Terminal 1: Start backend
-node server.js
-
-# Terminal 2: Start Vue dev server with hot reload
-cd client && npm run dev
+npm run dev          # Start backend
+npm run dev:server   # Backend with nodemon (auto-restart)
+npm run dev:client   # Start Vite frontend
+npm run build        # Install + build client
 ```
 
-- **Frontend dev server:** http://localhost:5173 (with hot module replacement)
-- **Backend API:** http://localhost:3000
-- Vite automatically proxies `/api/*` requests to the backend
+---
+
+## Roadmap & Improvements
+
+Areas where the project can be strengthened next:
+
+| Area | Improvement |
+|------|-------------|
+| **Retrieval quality** | Replace keyword search with vector embeddings (e.g. OpenAI embeddings + cosine similarity) for better semantic matching |
+| **Dev experience** | Add `.env.example`, single `npm run dev:all` script (concurrently) to start backend + frontend together |
+| **Auth UX** | Password reset, email verification, OAuth (Google/Microsoft SSO) for enterprise teams |
+| **Chat features** | Implement rename chat API (UI stub exists), streaming LLM responses, markdown/code rendering in messages |
+| **Knowledge admin** | Upload/edit knowledge files from an admin UI instead of manual file drops + server restart |
+| **Testing** | Unit tests for `knowledgeService` scoring, integration tests for auth and `/api/ask` |
+| **Deployment** | Docker Compose (API + MongoDB), CI pipeline, environment-specific configs |
+| **Security** | Refresh tokens, stricter rate limits on auth routes, input sanitization audit |
+| **Observability** | Structured JSON logs, request tracing, dashboard for query analytics |
+
+---
+
+## Potential New Features
+
+Ideas that would increase innovation, impact, and product quality:
+
+1. **Semantic search + citations** — Show which knowledge sections were used, with clickable source excerpts in the chat bubble
+2. **Module-scoped RAG** — When user picks "Order Creation" module, restrict search to OM docs and inject module context into the prompt
+3. **Multi-language support** — Detect question language and answer in the same language
+4. **Process flow diagrams** — Auto-generate Mermaid flowcharts from knowledge docs for visual learners
+5. **Slack / Teams bot** — Same RAG engine as a workplace integration for questions without opening the web app
+6. **Feedback loop** — Thumbs up/down on answers; log gaps when users mark "not helpful" to improve docs
+7. **Role-based knowledge** — Different doc visibility for ops vs finance vs warehouse roles
+8. **Document upload pipeline** — Ingest PDF/Word exports, chunk automatically, refresh index on schedule
+9. **Comparison mode** — "What's the difference between order cancellation and shipment return?" across domains
+10. **Analytics dashboard** — Top unanswered questions, busiest modules, average response time, doc coverage heatmap
 
 ---
 
