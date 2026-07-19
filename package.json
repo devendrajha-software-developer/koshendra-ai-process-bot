@@ -4,6 +4,7 @@
   "description": "Koshendra-Central Command of Your Resources",
   "main": "server.js",
   "scripts": {
+    "start": "node server.js",
     "dev": "node server.js",
     "dev:server": "nodemon server.js",
     "dev:client": "cd client && npm run dev",
