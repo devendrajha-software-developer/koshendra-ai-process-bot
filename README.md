@@ -23,6 +23,7 @@ An intelligent, self-hosted internal knowledge-base Q&A assistant that lets team
 - [Quick Start (Clone & Run)](#quick-start-clone--run)
 - [Configuration Reference](#configuration-reference)
 - [Development Mode](#development-mode)
+- [Deployment (Render + Vercel)](#deployment-render--vercel)
 - [Roadmap & Improvements](#roadmap--improvements)
 - [Potential New Features](#potential-new-features)
 
@@ -1029,7 +1030,9 @@ Serve the built frontend from `client/dist/` via your hosting setup, with the AP
 | `GROQ_API_KEY` | — | Groq API key |
 | `OPENAI_API_KEY` | — | OpenAI API key |
 | `ANTHROPIC_API_KEY` | — | Anthropic API key |
-| `ALLOWED_ORIGINS` | `http://localhost:7025,http://localhost:5173` | Comma-separated CORS origins |
+| `ALLOWED_ORIGINS` | *(local defaults only)* | Comma-separated origins; supports wildcards e.g. `https://*.vercel.app` |
+| `FRONTEND_URL` | — | Single frontend URL (alternative to `ALLOWED_ORIGINS`) |
+| `ALLOW_VERCEL` | — | Set to `true` to allow all `https://*.vercel.app` origins |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window in milliseconds |
 | `RATE_LIMIT_MAX_REQUESTS` | `100` | Max requests per rate limit window |
 
@@ -1054,6 +1057,120 @@ npm run dev:server   # Backend with nodemon (auto-restart)
 npm run dev:client   # Start Vite frontend
 npm run build        # Install + build client
 ```
+
+---
+
+## Deployment (Render + Vercel)
+
+**Short answer: you do not need port 7001 on Vercel or Render.**
+
+| Environment | Port | Who sets it |
+|-------------|------|-------------|
+| **Local dev** | Backend `7000`, frontend `7025` | You (optional `PORT=7000` in `.env`) |
+| **Render** | Dynamic (e.g. `10000`) | Render injects `process.env.PORT` automatically |
+| **Vercel (frontend)** | No port | Static hosting — no Node server listening |
+
+The backend already uses `process.env.PORT || 7000`, so on Render it listens on whatever port Render assigns. **Do not hardcode `PORT=7001` on Render** — it can break health checks.
+
+### Recommended setup
+
+```
+┌─────────────────────┐         HTTPS          ┌──────────────────────────┐
+│  Vercel (frontend)  │  ──────────────────▶   │  Render (Express API)    │
+│  Vue static build   │   VITE_API_URL=/api      │  server.js + MongoDB     │
+└─────────────────────┘                          └──────────────────────────┘
+```
+
+Deploy the **API on Render** and the **Vue app on Vercel**. They are two separate services.
+
+---
+
+### 1. Backend on Render
+
+1. Create a **Web Service** on [Render](https://render.com) and connect your Git repo
+2. Configure:
+
+| Setting | Value |
+|---------|-------|
+| **Root directory** | `.` (repo root) |
+| **Build command** | `npm install` |
+| **Start command** | `npm start` |
+| **Health check path** | `/health` |
+
+3. Add **Environment variables** in Render dashboard:
+
+```env
+GROQ_API_KEY=your_key
+MONGODB_URI=mongodb+srv://...
+JWT_SECRET=long-random-secret
+AI_PROVIDER=groq
+NODE_ENV=production
+
+# Option A — exact Vercel URL (no trailing slash)
+FRONTEND_URL=https://your-app.vercel.app
+
+# Option B — comma-separated list (supports wildcards for preview deploys)
+ALLOWED_ORIGINS=https://your-app.vercel.app,https://*.vercel.app
+
+# Option C — allow all Vercel app subdomains (easiest for Vercel)
+ALLOW_VERCEL=true
+FRONTEND_URL=https://your-app.vercel.app
+```
+
+> Do **not** set `PORT` — Render sets it for you.
+
+4. After deploy, note your API URL, e.g. `https://koshendra-api.onrender.com`
+
+---
+
+### 2. Frontend on Vercel
+
+1. Import the repo on [Vercel](https://vercel.com)
+2. Configure:
+
+| Setting | Value |
+|---------|-------|
+| **Root directory** | `client` |
+| **Framework preset** | Vite |
+| **Build command** | `npm run build` |
+| **Output directory** | `dist` |
+
+3. Add **Environment variable** (required — frontend and API are on different domains):
+
+```env
+VITE_API_URL=https://koshendra-api.onrender.com/api
+```
+
+Replace with your actual Render URL. Rebuild/redeploy after changing this variable.
+
+4. Deploy — your app will be at `https://your-app.vercel.app`
+
+5. Update Render `ALLOWED_ORIGINS` to include your Vercel URL (see step 1 above)
+
+---
+
+### Local vs production — port cheat sheet
+
+```
+LOCAL (two terminals):
+  Backend:  http://localhost:7000     ← npm run dev
+  Frontend: http://localhost:7025     ← cd client && npm run start
+  Vite proxy: 7025/api → 7000         ← only for local dev
+
+PRODUCTION:
+  Frontend: https://xxx.vercel.app
+  API:      https://xxx.onrender.com/api   ← set as VITE_API_URL
+  Port 7000 / 7001: not used publicly
+```
+
+### Common deployment mistakes
+
+| Mistake | Fix |
+|---------|-----|
+| Setting `PORT=7001` on Render | Remove it — let Render assign `PORT` |
+| Auth works locally but not on Vercel | Set `VITE_API_URL` to Render URL + `/api` |
+| CORS error in browser | Set `FRONTEND_URL` or `ALLOWED_ORIGINS` on Render; use `ALLOW_VERCEL=true` for Vercel preview URLs. Check Render logs for `[CORS] Blocked origin:` |
+| Vite proxy `7001` in local dev | Proxy must match local backend (`7000`), not production |
 
 ---
 
